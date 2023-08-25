@@ -1,65 +1,249 @@
 import os
+import signal
+import subprocess
 import requests
 import datetime
 from subprocess import call
+import tkinter as tk
+from tkinter import messagebox
+import threading
+from subprocess import Popen, call
+import psutil
 
 # Variables for user setup
-GITHUB_REPO_API = 'https://api.github.com/repos/EmotionIce/TreeX-Launcher/releases/latest'
+GITHUB_REPO_API = 'https://api.github.com/repos/EmotionIce/TreeX-Launcher/contents/'
 DIRECTORY_PATH = os.path.dirname(os.path.abspath(__file__))
 
-def fetch_latest_release_date():
+
+def find_jdk_path():
+    """
+    Locate the path of JDK 17's java executable.
+    """
+    command = "where" if os.name == "nt" else "which"
+
+    try:
+        # Try to find using 'where' or 'which' command
+        result = subprocess.check_output(
+            [command, "java"]).decode('utf-8').strip()
+
+        # On Windows, 'where' might return multiple paths, iterate over them
+        paths = result.splitlines() if os.name == "nt" else [result]
+
+        for path in paths:
+            try:
+                version_check = subprocess.check_output(
+                    [path, "-version"], stderr=subprocess.STDOUT).decode('utf-8')
+                # Debugging line
+
+                if "version \"17" in version_check:
+                    return path
+            except subprocess.CalledProcessError:
+                continue
+    except subprocess.CalledProcessError as e:
+        print(f"Error: {e}")  # Debugging line
+
+    # If not found using where/which, check common paths
+    common_paths = [
+        r"C:\Program Files\Java\jdk-17\bin\java.exe",  # Windows common path
+        r"/usr/bin/java",  # Linux common path
+        r"/usr/local/bin/java"  # MacOS common path
+    ]
+
+    for path in common_paths:
+        if os.path.exists(path):
+            try:
+                version_check = subprocess.check_output(
+                    [path, "-version"], stderr=subprocess.STDOUT).decode('utf-8')
+                if "version \"17" in version_check:
+                    return path
+            except Exception as e:
+                print(f"Error with path {path}: {e}")  # Debugging line
+                continue
+
+    return None
+
+
+JDK17_PATH = find_jdk_path()
+if not JDK17_PATH:
+    raise EnvironmentError("JDK 17 not found on the system.")
+
+
+def fetch_latest_jar_sha():
     response = requests.get(GITHUB_REPO_API)
+
+    if response.status_code != 200:
+        print(
+            f"Failed to fetch data from GitHub API. Status code: {response.status_code}")
+        print(response.text)  # Print the response for debugging
+        return None
+
     response_data = response.json()
-    return datetime.datetime.strptime(response_data['published_at'], '%Y-%m-%dT%H:%M:%SZ')
+    if not isinstance(response_data, list):
+        print("Unexpected response data format.")
+        print(response_data)
+        return None
+
+    for item in response_data:
+        if item['name'].endswith('.jar'):
+            return item['sha']
+
+    print("JAR file not found in the repository.")
+    return None
+
+
+def save_sha_value(sha):
+    with open(os.path.join(DIRECTORY_PATH, 'latest_sha.txt'), 'w') as f:
+        f.write(sha)
+
+
+def get_saved_sha_value():
+    try:
+        with open(os.path.join(DIRECTORY_PATH, 'latest_sha.txt'), 'r') as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return None
+
 
 def find_and_remove_outdated_jars(latest_release_date):
     for item in os.listdir(DIRECTORY_PATH):
         item_path = os.path.join(DIRECTORY_PATH, item)
         if item.endswith('.jar'):
-            item_modified_date = datetime.datetime.fromtimestamp(os.path.getmtime(item_path))
+            item_modified_date = datetime.datetime.fromtimestamp(
+                os.path.getmtime(item_path))
             if item_modified_date < latest_release_date:
                 print(f"Removing outdated JAR: {item}")
                 os.remove(item_path)
 
-def download_latest_jar(download_url):
-    jar_name = download_url.split("/")[-1]
-    save_path = os.path.join(DIRECTORY_PATH, jar_name)
-    response = requests.get(download_url, stream=True)
-    with open(save_path, 'wb') as out_file:
-        for chunk in response.iter_content(chunk_size=8192):
-            out_file.write(chunk)
-    return save_path
+
+def download_latest_jar():
+    response = requests.get(GITHUB_REPO_API)
+    if response.status_code != 200:
+        print(
+            f"Failed to fetch data from GitHub API. Status code: {response.status_code}")
+        return None
+
+    response_data = response.json()
+    if not isinstance(response_data, list):
+        print("Unexpected response data format.")
+        return None
+
+    for item in response_data:
+        if item['name'].endswith('.jar'):
+            jar_name = item['name']
+            save_path = os.path.join(DIRECTORY_PATH, jar_name)
+            response = requests.get(item['download_url'], stream=True)
+            with open(save_path, 'wb') as out_file:
+                for chunk in response.iter_content(chunk_size=8192):
+                    out_file.write(chunk)
+            return save_path
+    return None
+
+
+def restart_jar():
+    """
+    Restart the running JAR process.
+    """
+    # Stop the current JAR process
+    stop_jar()
+    # Launch the JAR again
+    launch_jar()
+
+
+def stop_jar():
+    """
+    Stops the running JAR process.
+    """
+    global jar_process
+    if jar_process:
+        print("Attempting to stop JAR...")  # Debug statement
+        # Kill the process and its child processes
+        parent = psutil.Process(jar_process.pid)
+        for child in parent.children(recursive=True):
+            child.terminate()
+            child.wait()  # Wait for child processes to finish
+        parent.terminate()
+        parent.wait()  # Wait for parent process to finish
+        jar_process = None
+        print("JAR process terminated.")  # Debug statement
+
+
+def launch_jar_thread():
+    """
+    A threaded method to launch the JAR.
+    """
+    global jar_process
+    jar_to_launch = next((file for file in os.listdir(
+        DIRECTORY_PATH) if file.endswith('.jar')), None)
+    if jar_to_launch:
+        print(f"Launching JAR: {jar_to_launch}")  # Debug statement
+        jar_process = subprocess.Popen(
+            [JDK17_PATH, '-jar', os.path.join(DIRECTORY_PATH, jar_to_launch)])
+        # Convert the subprocess.Popen object into a psutil.Process object
+        jar_process = psutil.Process(jar_process.pid)
+
+
+def launch_jar():
+    """
+    Launches the JAR if not already running.
+    """
+    print("Launch button clicked.")  # Debug statement
+    thread = threading.Thread(target=launch_jar_thread)
+    thread.start()
+
+
+def update_jar():
+    # Fetch the latest JAR sha from GitHub
+    latest_sha = fetch_latest_jar_sha()
+
+    # Get the saved sha value
+    saved_sha = get_saved_sha_value()
+
+    # If the sha values are the same, we already have the latest JAR
+    if saved_sha == latest_sha:
+        print("Already have the latest JAR.")
+        return
+
+    # Otherwise, download the new JAR
+    jar_path = download_latest_jar()
+    if jar_path:
+        # Save the new sha value
+        save_sha_value(latest_sha)
+        messagebox.showinfo("Info", f"Downloaded new JAR: {jar_path}")
+
+
+def stop_button_command():
+    print("Stop button clicked.")  # Debug statement
+    stop_jar()
+
+# ... [Rest of your functions]
+
+
+def show_gui():
+    root = tk.Tk()
+    root.title("JAR Launcher")
+
+    launch_button = tk.Button(root, text="Launch", command=launch_jar)
+    launch_button.pack(pady=20)
+
+    # Using stop_button_command
+    stop_button = tk.Button(root, text="Stop", command=stop_button_command)
+    stop_button.pack(pady=20)
+
+    restart_button = tk.Button(root, text="Restart", command=restart_jar)
+    restart_button.pack(pady=20)
+
+    update_button = tk.Button(root, text="Update", command=update_jar)
+    update_button.pack(pady=20)
+
+    root.mainloop()
+
+
+jar_process = None
+
 
 def main():
-    # Fetch the latest release date from GitHub
-    latest_release_date = fetch_latest_release_date()
+    show_gui()
 
-    # Remove outdated JARs in the directory
-    find_and_remove_outdated_jars(latest_release_date)
-
-    # Check if a JAR from the latest release already exists in the directory
-    jar_present = False
-    for item in os.listdir(DIRECTORY_PATH):
-        if item.endswith('.jar'):
-            item_path = os.path.join(DIRECTORY_PATH, item)
-            item_modified_date = datetime.datetime.fromtimestamp(os.path.getmtime(item_path))
-            if item_modified_date == latest_release_date:
-                jar_present = True
-                break
-
-    # If not present, download the latest JAR
-    if not jar_present:
-        response = requests.get(GITHUB_REPO_API)
-        for asset in response.json().get('assets', []):
-            if asset['name'].endswith('.jar'):
-                jar_path = download_latest_jar(asset['browser_download_url'])
-                print(f"Downloaded new JAR: {jar_path}")
-                break
-
-    # Launch the JAR (assuming there's only one JAR in the directory now)
-    jar_to_launch = next((file for file in os.listdir(DIRECTORY_PATH) if file.endswith('.jar')), None)
-    if jar_to_launch:
-        call(['java', '-jar', os.path.join(DIRECTORY_PATH, jar_to_launch)])
 
 if __name__ == "__main__":
     main()
