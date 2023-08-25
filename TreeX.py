@@ -1,6 +1,7 @@
 import os
 import signal
 import subprocess
+import sys
 import requests
 import datetime
 from subprocess import call
@@ -229,6 +230,13 @@ def on_leave(event):
     event.widget['background'] = '#333333'  # Restore the original color
 
 
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(
+        os.path.abspath(__file__)))
+    return os.path.join(base_path, relative_path)
+
+
 def show_gui():
     root = tk.Tk()
     root.title("JAR Launcher")
@@ -238,7 +246,7 @@ def show_gui():
     root.resizable(False, False)
 
     # Optionally set a window icon
-    # root.iconbitmap('path_to_icon.ico')
+    root.iconbitmap(resource_path('icon.ico'))
 
     # Styling
     bgColor = "#282828"  # Dark grey background
