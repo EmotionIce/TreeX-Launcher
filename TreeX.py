@@ -6,6 +6,7 @@ import datetime
 from subprocess import call
 import tkinter as tk
 from tkinter import messagebox
+from tkinter import font
 import threading
 from subprocess import Popen, call
 import psutil
@@ -156,15 +157,19 @@ def stop_jar():
     global jar_process
     if jar_process:
         print("Attempting to stop JAR...")  # Debug statement
-        # Kill the process and its child processes
-        parent = psutil.Process(jar_process.pid)
-        for child in parent.children(recursive=True):
-            child.terminate()
-            child.wait()  # Wait for child processes to finish
-        parent.terminate()
-        parent.wait()  # Wait for parent process to finish
-        jar_process = None
-        print("JAR process terminated.")  # Debug statement
+        try:
+            # Kill the process and its child processes
+            parent = psutil.Process(jar_process.pid)
+            for child in parent.children(recursive=True):
+                child.terminate()
+                child.wait()  # Wait for child processes to finish
+            parent.terminate()
+            parent.wait()  # Wait for parent process to finish
+        except psutil.NoSuchProcess:
+            print("Process already terminated.")  # Debug statement
+        finally:
+            jar_process = None
+            print("JAR process terminated.")  # Debug statement
 
 
 def launch_jar_thread():
@@ -208,32 +213,67 @@ def update_jar():
     if jar_path:
         # Save the new sha value
         save_sha_value(latest_sha)
-        messagebox.showinfo("Info", f"Downloaded new JAR: {jar_path}")
+        print(f"Downloaded new JAR: {jar_path}")
 
 
 def stop_button_command():
     print("Stop button clicked.")  # Debug statement
     stop_jar()
 
-# ... [Rest of your functions]
+
+def on_enter(event):
+    event.widget['background'] = '#4a4a4a'  # Darken the color on hover
+
+
+def on_leave(event):
+    event.widget['background'] = '#333333'  # Restore the original color
 
 
 def show_gui():
     root = tk.Tk()
     root.title("JAR Launcher")
 
-    launch_button = tk.Button(root, text="Launch", command=launch_jar)
-    launch_button.pack(pady=20)
+    # Set window size and prevent resizing
+    root.geometry("300x300")
+    root.resizable(False, False)
 
-    # Using stop_button_command
-    stop_button = tk.Button(root, text="Stop", command=stop_button_command)
-    stop_button.pack(pady=20)
+    # Optionally set a window icon
+    # root.iconbitmap('path_to_icon.ico')
 
-    restart_button = tk.Button(root, text="Restart", command=restart_jar)
-    restart_button.pack(pady=20)
+    # Styling
+    bgColor = "#282828"  # Dark grey background
+    btnColor = "#333333"  # Slightly lighter grey for buttons
+    btnFont = font.Font(size=12, family="Arial")
 
-    update_button = tk.Button(root, text="Update", command=update_jar)
-    update_button.pack(pady=20)
+    root.configure(bg=bgColor)
+
+    launch_button = tk.Button(root, text="Launch", command=launch_jar,
+                              bg=btnColor, fg="white", font=btnFont,
+                              relief="flat", borderwidth=0, padx=20, pady=10)
+    launch_button.pack(pady=10)
+    launch_button.bind("<Enter>", on_enter)
+    launch_button.bind("<Leave>", on_leave)
+
+    stop_button = tk.Button(root, text="Stop", command=stop_button_command,
+                            bg=btnColor, fg="white", font=btnFont,
+                            relief="flat", borderwidth=0, padx=20, pady=10)
+    stop_button.pack(pady=10)
+    stop_button.bind("<Enter>", on_enter)
+    stop_button.bind("<Leave>", on_leave)
+
+    restart_button = tk.Button(root, text="Restart", command=restart_jar,
+                               bg=btnColor, fg="white", font=btnFont,
+                               relief="flat", borderwidth=0, padx=20, pady=10)
+    restart_button.pack(pady=10)
+    restart_button.bind("<Enter>", on_enter)
+    restart_button.bind("<Leave>", on_leave)
+
+    update_button = tk.Button(root, text="Update", command=update_jar,
+                              bg=btnColor, fg="white", font=btnFont,
+                              relief="flat", borderwidth=0, padx=20, pady=10)
+    update_button.pack(pady=10)
+    update_button.bind("<Enter>", on_enter)
+    update_button.bind("<Leave>", on_leave)
 
     root.mainloop()
 
@@ -242,6 +282,7 @@ jar_process = None
 
 
 def main():
+    update_jar()  # Check for updates before showing the GUI
     show_gui()
 
 
