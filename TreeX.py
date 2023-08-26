@@ -313,19 +313,19 @@ def show_gui():
     btnFont = font.Font(size=12, family="Arial")
 
     launch_button = tk.Button(root, text="Launch", command=custom_launch_jar,
-                              bg=btnColor, fg="white", font=btnFont)
+                              bg="white", fg="black", font=btnFont)
     launch_button.pack(pady=10)
 
     stop_button = tk.Button(root, text="Stop", command=custom_stop_jar,
-                            bg=btnColor, fg="white", font=btnFont)
+                            bg="white", fg="black", font=btnFont)
     stop_button.pack(pady=10)
 
     restart_button = tk.Button(root, text="Restart", command=custom_restart_jar,
-                               bg=btnColor, fg="white", font=btnFont)
+                               bg="white", fg="black", font=btnFont)
     restart_button.pack(pady=10)
 
     update_button = tk.Button(root, text="Update", command=update_jar,
-                              bg=btnColor, fg="white", font=btnFont)
+                              bg="white", fg="black", font=btnFont)
     update_button.pack(pady=10)
 
     root.mainloop()
