@@ -8,7 +8,7 @@ a = Analysis(
     ['TreeX.py'],
     pathex=[],
     binaries=[],
-    datas=[('./icon.ico', '.')],
+    datas=[('./icon.ico', '.'), ('./logo.png', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

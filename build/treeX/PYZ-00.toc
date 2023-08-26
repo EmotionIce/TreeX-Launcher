@@ -1,4 +1,4 @@
-('C:\\Users\\etien\\Desktop\\TreeX Launcher\\build\\TreeX\\PYZ-00.pyz',
+('C:\\Users\\etien\\Desktop\\TreeX Launcher\\build\\treeX\\PYZ-00.pyz',
  [('__future__',
    'C:\\Program '
    'Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\\lib\\__future__.py',

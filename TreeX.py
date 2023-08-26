@@ -8,13 +8,26 @@ from subprocess import call
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import font
+from tkinter import PhotoImage
 import threading
 from subprocess import Popen, call
 import psutil
 
 # Variables for user setup
 GITHUB_REPO_API = 'https://api.github.com/repos/EmotionIce/TreeX-Launcher/contents/'
-DIRECTORY_PATH = os.path.dirname(os.path.abspath(__file__))
+# Check if running as a script or a standalone executable
+if getattr(sys, 'frozen', False):
+    # we are running in a bundle (i.e., packaged as an exe)
+    DIRECTORY_PATH = os.path.dirname(sys.executable)
+else:
+    # we are running in a normal Python environment
+    DIRECTORY_PATH = os.path.dirname(os.path.abspath(__file__))
+
+# Custom Colors
+bgColor = "#303030"
+btnColor = "#424242"
+successColor = "#348054"
+dangerColor = "#ba2722"
 
 
 def find_jdk_path():
@@ -141,13 +154,15 @@ def download_latest_jar():
     return None
 
 
+def reset_status():
+    global status_label
+    if status_label:
+        status_label.config(text="Ready", fg="white")
+
+
 def restart_jar():
-    """
-    Restart the running JAR process.
-    """
-    # Stop the current JAR process
     stop_jar()
-    # Launch the JAR again
+    reset_status()
     launch_jar()
 
 
@@ -168,24 +183,33 @@ def stop_jar():
             parent.wait()  # Wait for parent process to finish
         except psutil.NoSuchProcess:
             print("Process already terminated.")  # Debug statement
+            reset_status()
         finally:
             jar_process = None
             print("JAR process terminated.")  # Debug statement
+            reset_status()
 
 
 def launch_jar_thread():
     """
     A threaded method to launch the JAR.
     """
-    global jar_process
+    global jar_process, status_label
     jar_to_launch = next((file for file in os.listdir(
         DIRECTORY_PATH) if file.endswith('.jar')), None)
     if jar_to_launch:
         print(f"Launching JAR: {jar_to_launch}")  # Debug statement
         jar_process = subprocess.Popen(
-            [JDK17_PATH, '-jar', os.path.join(DIRECTORY_PATH, jar_to_launch)])
-        # Convert the subprocess.Popen object into a psutil.Process object
-        jar_process = psutil.Process(jar_process.pid)
+            [JDK17_PATH, '-jar', os.path.join(DIRECTORY_PATH, jar_to_launch)],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
+
+        for line in iter(jar_process.stdout.readline, ''):
+            if "Completed initialization" in line:
+                if status_label:
+                    print("JAR initialized.")
+                    status_label.config(text="Initialized", fg=successColor)
+                break
 
 
 def launch_jar():
@@ -198,6 +222,7 @@ def launch_jar():
 
 
 def update_jar():
+    global status_label
     # Fetch the latest JAR sha from GitHub
     latest_sha = fetch_latest_jar_sha()
 
@@ -207,6 +232,8 @@ def update_jar():
     # If the sha values are the same, we already have the latest JAR
     if saved_sha == latest_sha:
         print("Already have the latest JAR.")
+        if (status_label):
+            status_label.config(text="Already up to date", fg=successColor)
         return
 
     # Otherwise, download the new JAR
@@ -215,6 +242,11 @@ def update_jar():
         # Save the new sha value
         save_sha_value(latest_sha)
         print(f"Downloaded new JAR: {jar_path}")
+        if (status_label):
+            status_label.config(text="Updated", fg=successColor)
+        return
+    if (status_label):
+        status_label.config(text="Failed to update", fg=dangerColor)
 
 
 def stop_button_command():
@@ -238,54 +270,68 @@ def resource_path(relative_path):
 
 
 def show_gui():
+    global status_label
     root = tk.Tk()
-    root.title("JAR Launcher")
+    root.title("TreeX")
 
     # Set window size and prevent resizing
-    root.geometry("300x300")
-    root.resizable(False, False)
-
-    # Optionally set a window icon
-    root.iconbitmap(resource_path('icon.ico'))
-
-    # Styling
-    bgColor = "#282828"  # Dark grey background
-    btnColor = "#333333"  # Slightly lighter grey for buttons
-    btnFont = font.Font(size=12, family="Arial")
+    root.geometry("300x375")
 
     root.configure(bg=bgColor)
 
-    launch_button = tk.Button(root, text="Launch", command=launch_jar,
-                              bg=btnColor, fg="white", font=btnFont,
-                              relief="flat", borderwidth=0, padx=20, pady=10)
+    logoSizeX = 100
+    logoSizeY = 100
+    # Create a canvas for the logo
+    canvas = tk.Canvas(root, width=logoSizeX, height=logoSizeY,
+                       bg=bgColor, highlightthickness=0)
+    canvas.pack(pady=10)
+
+    # Load and add the logo
+    logo = PhotoImage(file=resource_path("logo.png"))
+    canvas.create_image(logoSizeX / 2, logoSizeY / 2,
+                        image=logo)  # Add the logo to the canvas
+
+    status_label = tk.Label(root, text="Ready", fg="white", bg=bgColor)
+    status_label.pack(pady=10)
+
+    def update_status(message, color):
+        status_label['text'] = message
+        status_label['fg'] = color
+
+    def custom_launch_jar():
+        launch_jar()
+        update_status("Launching...", "#FFD700")
+
+    def custom_stop_jar():
+        stop_jar()
+        update_status("Stopped", dangerColor)
+
+    def custom_restart_jar():
+        restart_jar()
+        update_status("Restarting...", "#FFD700")
+
+    btnFont = font.Font(size=12, family="Arial")
+
+    launch_button = tk.Button(root, text="Launch", command=custom_launch_jar,
+                              bg=btnColor, fg="white", font=btnFont)
     launch_button.pack(pady=10)
-    launch_button.bind("<Enter>", on_enter)
-    launch_button.bind("<Leave>", on_leave)
 
-    stop_button = tk.Button(root, text="Stop", command=stop_button_command,
-                            bg=btnColor, fg="white", font=btnFont,
-                            relief="flat", borderwidth=0, padx=20, pady=10)
+    stop_button = tk.Button(root, text="Stop", command=custom_stop_jar,
+                            bg=btnColor, fg="white", font=btnFont)
     stop_button.pack(pady=10)
-    stop_button.bind("<Enter>", on_enter)
-    stop_button.bind("<Leave>", on_leave)
 
-    restart_button = tk.Button(root, text="Restart", command=restart_jar,
-                               bg=btnColor, fg="white", font=btnFont,
-                               relief="flat", borderwidth=0, padx=20, pady=10)
+    restart_button = tk.Button(root, text="Restart", command=custom_restart_jar,
+                               bg=btnColor, fg="white", font=btnFont)
     restart_button.pack(pady=10)
-    restart_button.bind("<Enter>", on_enter)
-    restart_button.bind("<Leave>", on_leave)
 
     update_button = tk.Button(root, text="Update", command=update_jar,
-                              bg=btnColor, fg="white", font=btnFont,
-                              relief="flat", borderwidth=0, padx=20, pady=10)
+                              bg=btnColor, fg="white", font=btnFont)
     update_button.pack(pady=10)
-    update_button.bind("<Enter>", on_enter)
-    update_button.bind("<Leave>", on_leave)
 
     root.mainloop()
 
 
+status_label = None
 jar_process = None
 
 
