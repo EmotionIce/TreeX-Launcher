@@ -12,6 +12,7 @@ from tkinter import PhotoImage
 import threading
 from subprocess import Popen, call
 import psutil
+import socket
 
 # Variables for user setup
 GITHUB_REPO_API = 'https://api.github.com/repos/EmotionIce/TreeX-Launcher/contents/'
@@ -28,6 +29,11 @@ bgColor = "#303030"
 btnColor = "#424242"
 successColor = "#348054"
 dangerColor = "#ba2722"
+
+
+def check_if_service_running(port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(('localhost', port)) == 0
 
 
 def find_jdk_path():
@@ -299,8 +305,11 @@ def show_gui():
         status_label['fg'] = color
 
     def custom_launch_jar():
-        launch_jar()
-        update_status("Launching...", "#FFD700")
+        if not check_if_service_running(8090):
+            launch_jar()
+            update_status("Launching...", "#FFD700")
+        else:
+            update_status("Service already running on port 8090", dangerColor)
 
     def custom_stop_jar():
         stop_jar()
