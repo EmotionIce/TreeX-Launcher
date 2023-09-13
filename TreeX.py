@@ -67,7 +67,8 @@ def find_jdk_path():
     common_paths = [
         r"C:\Program Files\Java\jdk-17\bin\java.exe",  # Windows common path
         r"/usr/bin/java",  # Linux common path
-        r"/usr/local/bin/java"  # MacOS common path
+        r"/usr/local/bin/java",  # MacOS common path
+        r"/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home/bin/java"
     ]
 
     for path in common_paths:
