@@ -249,6 +249,13 @@ def update_jar():
         # Save the new sha value
         save_sha_value(latest_sha)
         print(f"Downloaded new JAR: {jar_path}")
+
+        # Remove old JAR files
+        for item in os.listdir(DIRECTORY_PATH):
+            item_path = os.path.join(DIRECTORY_PATH, item)
+            if item.endswith('.jar') and item_path != jar_path:
+                os.remove(item_path)
+
         if (status_label):
             status_label.config(text="Updated", fg=successColor)
         return
@@ -270,9 +277,12 @@ def on_leave(event):
 
 
 def resource_path(relative_path):
-    """ Get absolute path to resource, works for dev and for PyInstaller """
-    base_path = getattr(sys, '_MEIPASS', os.path.dirname(
-        os.path.abspath(__file__)))
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
     return os.path.join(base_path, relative_path)
 
 
